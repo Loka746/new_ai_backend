@@ -18,5 +18,6 @@ out/
 .vscodeignore
 package-lock.json
 package.json
+package1.json
 SEARCH_AND_DEBUG_FEATURES.md
 tsconfig.json
