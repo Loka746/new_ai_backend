@@ -37,7 +37,7 @@ send({"status": "Backend ready"})
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-GEMINI_MODEL = "gemini-2.5-pro-preview"
+GEMINI_MODEL = "gemini-3-pro-preview"
 
 
 # load_dotenv()
