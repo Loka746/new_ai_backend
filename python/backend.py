@@ -33,7 +33,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("Gemini API key not configured")
 client = genai.Client(api_key=GEMINI_API_KEY)
-GEMINI_MODEL = "gemini-2.0-pro-exp"  # or whatever model you use
+GEMINI_MODEL = "gemini-3-pro-preview"  # or whatever model you use
 
 # ------------------------------------------------------------
 # FastAPI app
