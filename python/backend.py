@@ -162,6 +162,12 @@ GET FILE INFO:
   "action": "get_file_info",
   "path": "<relative_path/file.py>"
 }
+
+AUTO DEBUG (no file specified):
+{
+  "action": "auto_debug"
+}
+
 OPERATION MODE RULES:
 
 1. If performing file system actions (create, update, delete, run, search):
@@ -675,18 +681,40 @@ async def chat_endpoint(request: ChatRequest):
 class DebugRequest(BaseModel):
     file_path: str
     content: str
+    error: Optional[str] = None
 
 @app.post("/debug")
 async def debug_endpoint(req: DebugRequest):
     """
-    Receives a file's content, analyzes it, and returns a fixed version.
+    Receives a file's content and an optional error message,
+    uses Gemini to fix the code, and returns the corrected version.
     """
     try:
-        # Here you could call Gemini to fix the file.
-        # For now, return the content unchanged.
-        return {"fixed_content": req.content, "errors": []}
+        # Prepare a prompt for Gemini
+        prompt = f"""You are an expert programmer. Fix the following code.
+The code may have syntax or runtime errors.
+If an error message is provided, use it to guide the fix.
+Return ONLY the corrected code, no explanations, no markdown.
+
+File: {req.file_path}
+Error: {req.error if req.error else 'No specific error provided'}
+
+Code:
+{req.content}
+
+Corrected code:"""
+        
+        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        fixed_content = response.text.strip()
+        
+        # Basic validation: ensure we got something
+        if not fixed_content:
+            fixed_content = req.content  # fallback
+        
+        return {"fixed_content": fixed_content, "errors": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ------------------------------------------------------------
 # For running directly (not used on Render)
