@@ -695,15 +695,32 @@ Corrected code:"""
         response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
         fixed_content = response.text.strip()
         
-        # Basic validation: ensure we got something
+        # Strip markdown code blocks if present
+        if fixed_content.startswith('```') and fixed_content.endswith('```'):
+            lines = fixed_content.split('\n')
+            # Remove first line if it starts with ```
+            if lines and lines[0].startswith('```'):
+                lines = lines[1:]
+            # Remove last line if it ends with ```
+            if lines and lines[-1].startswith('```'):
+                lines = lines[:-1]
+            fixed_content = '\n'.join(lines).strip()
+        # Remove any leading language identifier like 'python' on first line
+        if fixed_content.startswith('python\n'):
+            fixed_content = fixed_content[7:]
+        elif fixed_content.startswith('javascript\n'):
+            fixed_content = fixed_content[11:]
+        
         if not fixed_content:
             fixed_content = req.content  # fallback
         
         return {"fixed_content": fixed_content, "errors": []}
     except Exception as e:
+        # Log the error for debugging
+        print(f"Error in /debug: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
+    
 # ------------------------------------------------------------
 # For running directly (not used on Render)
 # ------------------------------------------------------------
