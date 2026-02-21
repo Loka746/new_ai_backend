@@ -4,8 +4,27 @@
 __pycache__/
 /__pycache__/
 
+media/
+/media/
 
+out/
+/out/
 
+src/
+/src/
+
+package-lock.json
+
+package.json
+
+tsconfig.json
+
+vibecoding-0.0.16.vsix
+
+node_modules/
+/node_modules/
+
+README.md
 
 # Specific Files
 .env
