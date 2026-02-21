@@ -142,23 +142,21 @@ SEARCH FILES:
 {
   "action": "search_files",
   "keyword": "<term>",
-  "file_type": ".py",
-  "max_results": 10
+  "file_type": ".py"
 }
 
 SEARCH FOLDERS:
 {
   "action": "search_folders",
-  "keyword": "<term>",
-  "max_results": 10
+  "keyword": "<term>"
 }
 
 SEARCH INSIDE FILES:
 {
   "action": "search_in_files",
   "keyword": "<term>",
-  "file_pattern": "*.py",
-  "max_results": 10
+  "file_pattern": "*.py"
+  
 }
 
 GET FILE INFO:
@@ -508,6 +506,7 @@ def handle_debug_file(path: str, debug_stage: str = "all") -> List[dict]:
 # AI processing
 # ------------------------------------------------------------
 def process_message(user_input: str, conversation_history: str = "") -> str:
+    
     """Call Gemini and return the raw text reply."""
     if not check_gemini_available():
         return "Error: Cannot connect to Gemini API. Please check your API key."
@@ -671,55 +670,53 @@ class DebugRequest(BaseModel):
     content: str
     error: Optional[str] = None
 
+
 @app.post("/debug")
 async def debug_endpoint(req: DebugRequest):
-    """
-    Receives a file's content and an optional error message,
-    uses Gemini to fix the code, and returns the corrected version.
-    """
     try:
-        # Prepare a prompt for Gemini
-        prompt = f"""You are an expert programmer. Fix the following code.
-The code may have syntax or runtime errors.
-If an error message is provided, use it to guide the fix.
-Return ONLY the corrected code, no explanations, no markdown.
+        # Validate syntax
+        syntax_error, _ = validate_python_code(req.content, req.file_path)
+
+        # Build intelligent prompt
+        prompt = f"""
+You are an expert programmer. Fix the following code completely.
+Return ONLY the corrected full file, no explanations, no markdown, no backticks.
+Keep functionality intact, fix syntax/runtime errors, and address logical issues if obvious.
 
 File: {req.file_path}
-Error: {req.error if req.error else 'No specific error provided'}
+Terminal Error: {req.error if req.error else 'Not provided'}
+Syntax Error: {syntax_error if syntax_error else 'None'}
 
 Code:
 {req.content}
 
-Corrected code:"""
-        
+Corrected code:
+"""
         response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
         fixed_content = response.text.strip()
-        
-        # Strip markdown code blocks if present
+
+        # Remove markdown code fences if present
         if fixed_content.startswith('```') and fixed_content.endswith('```'):
             lines = fixed_content.split('\n')
-            # Remove first line if it starts with ```
-            if lines and lines[0].startswith('```'):
+            # Remove first and last lines if they contain only backticks
+            if lines and lines[0].strip().startswith('```'):
                 lines = lines[1:]
-            # Remove last line if it ends with ```
-            if lines and lines[-1].startswith('```'):
+            if lines and lines[-1].strip().startswith('```'):
                 lines = lines[:-1]
             fixed_content = '\n'.join(lines).strip()
-        # Remove any leading language identifier like 'python' on first line
-        if fixed_content.startswith('python\n'):
+        # Remove leading language identifier (e.g., "python\n")
+        elif fixed_content.startswith('python\n'):
             fixed_content = fixed_content[7:]
         elif fixed_content.startswith('javascript\n'):
             fixed_content = fixed_content[11:]
-        
+
         if not fixed_content:
             fixed_content = req.content  # fallback
-        
-        return {"fixed_content": fixed_content, "errors": []}
+
+        return {"fixed_content": fixed_content}
     except Exception as e:
-        # Log the error for debugging
         print(f"Error in /debug: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
     
 # ------------------------------------------------------------
 # For running directly (not used on Render)

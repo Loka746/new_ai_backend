@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<style>
+  body {
+    margin: 0;
+    background: #0f0f0f;
+    color: white;
+    font-family: sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* CHAT AREA */
+  #chat {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* MESSAGE BUBBLES */
+  .msg {
+    max-width: 80%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .user {
+    background: #25ebde;
+    align-self: flex-end;
+  }
+
+  .bot {
+    background: #1e1e1e;
+    align-self: flex-start;
+  }
+
+  /* INPUT BAR */
+  #inputBox {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid #222;
+    background: #0f0f0f;
+  }
+
+  /* TEXTAREA */
+  #input {
+    flex: 1;
+    resize: none;
+    max-height: 120px;
+    padding: 8px;
+    background: #111;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    outline: none;
+    overflow-y: auto;
+    font-family: inherit;
+  }
+
+  /* UPLOAD BUTTON */
+  #upload {
+    background: #1e1e1e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0 12px;
+    font-size: 16px;
+  }
+
+  #upload:hover {
+    background: #2a2a2a;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="chat"></div>
+
+<div id="inputBox">
+  <textarea id="input" rows="1" placeholder="Ask VibeCoding..."></textarea>
+  <button id="upload" type="button">📎</button>
+</div>
+
+<input type="file" id="fileInput" style="display:none" />
+
+<script>
+  const vscode = acquireVsCodeApi();
+
+  const chat = document.getElementById("chat");
+  const input = document.getElementById("input");
+  const uploadBtn = document.getElementById("upload");
+  const fileInput = document.getElementById("fileInput");
+
+  let thinkingMsg = null;
+
+  function addUser(text) {
+    const d = document.createElement("div");
+    d.className = "msg user";
+    d.textContent = text;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function showThinking() {
+    thinkingMsg = document.createElement("div");
+    thinkingMsg.className = "msg bot";
+    thinkingMsg.textContent = "🤔 Thinking...";
+    chat.appendChild(thinkingMsg);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function replaceThinking(text) {
+    if (thinkingMsg) {
+      thinkingMsg.textContent = text;
+      thinkingMsg = null;
+    } else {
+      const d = document.createElement("div");
+      d.className = "msg bot";
+      d.textContent = text;
+      chat.appendChild(d);
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  // Initial message
+  //replaceThinking("VibeCoding ready 🚀");
+
+  // Listen for messages from extension
+  window.addEventListener("message", event => {
+    const msg = event.data;
+
+    if (msg.type === "thinking") {
+      showThinking();
+    }
+
+    if (msg.type === "bot" || msg.type === "response") {
+      replaceThinking(msg.text);
+    }
+
+    // Handle errors
+    if (msg.type === "error") {
+      replaceThinking("Error: " + msg.text);
+    }
+
+    // Handle status updates
+    if (msg.type === "status") {
+      console.log("Status:", msg.text);
+    }
+
+    // Handle ready message
+    if (msg.type === "ready") {
+      replaceThinking(msg.text);
+    }
+  });
+
+  // Auto-grow textarea
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  });
+
+  // Enter / Shift+Enter handling
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.value.trim()) {
+        const userText = input.value;
+        addUser(userText);
+        // Send to VSCode extension (which forwards to backend)
+        vscode.postMessage({ command: "sendMessage", text: userText });
+        input.value = "";
+        input.style.height = "auto";
+      }
+    }
+  });
+
+  // Upload button → file picker
+  uploadBtn.addEventListener("click", () => {
+    fileInput.click();
+  });
+
+  // File selected
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      vscode.postMessage({
+        type: "fileUpload",
+        name: file.name,
+        content: reader.result
+      });
+    };
+    reader.readAsText(file);
+  });
+</script>
+
+</body>
+</html>
+
