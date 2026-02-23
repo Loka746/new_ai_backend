@@ -65,14 +65,17 @@ You are an advanced VS Code Extension AI Assistant.
 You operate in STRICT ACTION MODE.
 
 GENERAL RULES:
-- Always begin your response with a short, friendly explanation of what you are about to do. For example: "I'll create a file for you to sum three numbers."
-- After the explanation, on a new line, output **only one** valid JSON object representing the action.
-- Never combine two actions in one JSON object.
-- Never use markdown or backticks.
-- Never include comments or extra text after the JSON.
-- Use \\n for all line breaks inside JSON strings.
+- Always return ONLY valid JSON when performing actions.
+- Never use markdown.
+- Never use backticks.
+- Never include explanations.
+- Never include comments.
+- Never include triple quotes.
+- Never include actual newlines inside JSON strings.
+- Use \\n for all line breaks.
 - All JSON must be syntactically valid.
 - Be precise and deterministic.
+
 
 ----------------------------------------
 AVAILABLE ACTIONS
@@ -155,6 +158,23 @@ GET FILE INFO:
   "path": "<relative_path/file.py>"
 }
 
+
+
+OPERATION MODE RULES:
+
+1. If performing file system actions (create, update, delete, run, search):
+   → Return valid JSON only.
+
+2. If user asks for explanation or example code:
+   → Return normal formatted code (no JSON).
+
+3. If debugging file:
+   → Return update_file JSON with corrected full content.
+
+4. Never mix raw code and JSON.
+5. Never wrap JSON in markdown.
+
+
 ----------------------------------------
 IMPORTANT DEBUGGING RULE:
 When the user asks to fix a bug in an existing file, 
@@ -162,6 +182,7 @@ you MUST return a `debug_file` action (with the file path).
 Do NOT return `update_file` with new content – 
 the extension will handle the actual fixing by running the file 
 and using the /debug endpoint.
+----------------------------------------
 
 ----------------------------------------
 IMPORTANT
@@ -173,6 +194,7 @@ ALWAYS suggest running the main file using run_file action in a separate JSON re
 Never combine two actions in one JSON object.
 Return exactly one valid JSON object per response.
 """
+
 # ------------------------------------------------------------
 # Utility functions (unchanged, but used only for validation etc.)
 # ------------------------------------------------------------
@@ -376,7 +398,6 @@ def execute_and_capture_errors(code):
         sys.stderr = old_stderr
 
 def extract_json_objects(s):
-    """Extract JSON objects and return list of (object, raw_string) tuples."""
     if not isinstance(s, str):
         return []
     objects = []
@@ -405,48 +426,13 @@ def extract_json_objects(s):
                             try:
                                 obj_str = s[start:i+1]
                                 obj = json.loads(obj_str)
-                                objects.append((obj, obj_str))
+                                objects.append(obj)
                             except json.JSONDecodeError:
                                 pass
                             break
                 i += 1
         i += 1
     return objects
-    # if not isinstance(s, str):
-    #     return []
-    # objects = []
-    # i = 0
-    # n = len(s)
-    # while i < n:
-    #     if s[i] == '{':
-    #         start = i
-    #         brace_depth = 0
-    #         in_string = False
-    #         escape_next = False
-    #         while i < n:
-    #             char = s[i]
-    #             if escape_next:
-    #                 escape_next = False
-    #             elif char == '\\':
-    #                 escape_next = True
-    #             elif char == '"' and not escape_next:
-    #                 in_string = not in_string
-    #             elif not in_string:
-    #                 if char == '{':
-    #                     brace_depth += 1
-    #                 elif char == '}':
-    #                     brace_depth -= 1
-    #                     if brace_depth == 0:
-    #                         try:
-    #                             obj_str = s[start:i+1]
-    #                             obj = json.loads(obj_str)
-    #                             objects.append(obj)
-    #                         except json.JSONDecodeError:
-    #                             pass
-    #                         break
-    #             i += 1
-    #     i += 1
-    # return objects
 
 def check_gemini_available():
     try:
@@ -528,7 +514,7 @@ def process_message(user_input: str, conversation_history: str = "") -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
-# def process_user_message(request: ChatRequest) -> List[dict]:
+def process_user_message(request: ChatRequest) -> List[dict]:
     """
     Main entry point for /chat.
     Returns a list of messages (dicts) to be sent back to the extension.
@@ -582,9 +568,7 @@ def process_message(user_input: str, conversation_history: str = "") -> str:
     messages.append(response_message(assistant_reply))
 
     # 3. Extract JSON actions from the reply and handle them.
-    json_results = extract_json_objects(assistant_reply)   # list of (obj, raw_str)
-    json_objects = [obj for obj, _ in json_results]
-    raw_jsons = [raw for _, raw in json_results]
+    json_objects = extract_json_objects(assistant_reply)
     for obj in json_objects:
         action = obj.get("action") or obj.get("intent")
         if not action:
@@ -657,151 +641,7 @@ def process_message(user_input: str, conversation_history: str = "") -> str:
             messages.append(error_message(f"Unknown action: {act}"))
 
     return messages
-def process_user_message(request: ChatRequest) -> List[dict]:
-    """
-    Main entry point for /chat.
-    Returns a list of messages (dicts) to be sent back to the extension.
-    """
-    messages = []
 
-    # 1. If there is a pending action, handle it as a confirmation.
-    if request.pending_action:
-        action_data = request.pending_action
-        act = action_data.get("action") or action_data.get("intent")
-        if act == "create_file":
-            path = action_data.get("path") or action_data.get("file_path")
-            content = action_data.get("content", "")
-            if path:
-                messages.extend(handle_create_file(path, content, confirmed=True))
-            else:
-                messages.append(error_message("Missing path in pending action"))
-        elif act == "update_file":
-            path = action_data.get("path") or action_data.get("file_path")
-            content = action_data.get("content", "")
-            if path:
-                messages.extend(handle_update_file(path, content, confirmed=True))
-            else:
-                messages.append(error_message("Missing path in pending action"))
-        elif act == "create_folder":
-            folder = action_data.get("folder") or action_data.get("folder_path")
-            if folder:
-                messages.append(create_folder_action(folder))
-            else:
-                messages.append(error_message("Missing folder in pending action"))
-        elif act == "create_project":
-            folder = action_data.get("folder") or action_data.get("project")
-            files = action_data.get("files", [])
-            if folder and files:
-                messages.extend(handle_create_project(folder, files))
-            else:
-                messages.append(error_message("Missing folder or files in pending action"))
-        elif act == "run_file":
-            path = action_data.get("path") or action_data.get("file_path")
-            env = action_data.get("environment", "none")
-            if path:
-                messages.extend(handle_run_file(path, env))
-            else:
-                messages.append(error_message("Missing path in pending action"))
-        else:
-            messages.append(error_message(f"Unknown pending action: {act}"))
-        return messages
-
-    # 2. No pending action: process the user message normally.
-    assistant_reply = process_message(request.message, request.conversation_history)
-
-    # --- NEW: Separate explanation from JSON actions ---
-    # Extract JSON objects and their raw strings
-    json_results = extract_json_objects(assistant_reply)   # list of (obj, raw_str)
-    json_objects = [obj for obj, _ in json_results]
-    raw_jsons = [raw for _, raw in json_results]
-
-    # Remove all JSON strings from the assistant reply to obtain the explanation
-    explanation = assistant_reply
-    for raw in raw_jsons:
-        explanation = explanation.replace(raw, '')
-
-    # Clean up extra whitespace
-    explanation = explanation.strip()
-
-    # If there is any explanatory text, show it
-    if explanation:
-        messages.append(response_message(explanation))
-    # Optionally, if no explanation but there are actions, you could add a default message
-    elif json_objects:
-        # You could add a status like "Performing requested actions..." if desired
-        pass
-    # ----------------------------------------------------
-
-    # 3. Process JSON actions from the reply (the extracted objects)
-    for obj in json_objects:
-        action = obj.get("action") or obj.get("intent")
-        if not action:
-            continue
-        act = action.strip().lower()
-
-        if act in ("create_folder", "create folder", "createfolder"):
-            folder = obj.get("folder") or obj.get("name")
-            if folder:
-                messages.append(create_folder_action(folder))
-            else:
-                messages.append(error_message("Missing folder name"))
-
-        elif act in ("create_project", "create project", "createproject"):
-            folder = obj.get("folder") or obj.get("name") or obj.get("project")
-            files = obj.get("files", [])
-            if folder and files:
-                messages.extend(handle_create_project(folder, files))
-            else:
-                messages.append(error_message("Missing folder name or files list"))
-
-        elif act in ("create_file", "create file", "createfile"):
-            path = obj.get("path") or obj.get("filename") or obj.get("file")
-            content = obj.get("content", "")
-            if path:
-                messages.extend(handle_create_file(path, content))
-            else:
-                messages.append(error_message("Missing path"))
-
-        elif act in ("update_file", "update file", "updatefile"):
-            path = obj.get("path") or obj.get("filename") or obj.get("file")
-            content = obj.get("content", "")
-            if path:
-                messages.extend(handle_update_file(path, content))
-            else:
-                messages.append(error_message("Missing path"))
-
-        elif act in ("run_file", "run file", "runfile", "test_file", "test file", "testfile"):
-            path = obj.get("path") or obj.get("filename") or obj.get("file")
-            env = obj.get("environment", "none")
-            if path:
-                messages.extend(handle_run_file(path, env))
-            else:
-                messages.append(error_message("Missing path"))
-
-        elif act in ("debug_file", "debug file", "debugfile"):
-            path = obj.get("path") or obj.get("filename") or obj.get("file")
-            stage = obj.get("stage", "all")
-            if path:
-                messages.extend(handle_debug_file(path, stage))
-            else:
-                messages.append(error_message("Missing path"))
-
-        elif act in ("auto_debug", "auto debug", "autodebug"):
-            messages.append({"type": "auto_debug"})
-
-        # For search actions, we forward a status message (they are handled locally by the extension)
-        elif act in ("search_files", "search files", "searchfiles"):
-            messages.append(status_message("File search is handled locally by the extension."))
-        elif act in ("search_folders", "search folders", "searchfolders"):
-            messages.append(status_message("Folder search is handled locally by the extension."))
-        elif act in ("search_in_files", "search in files", "searchinfiles", "grep"):
-            messages.append(status_message("Content search is handled locally by the extension."))
-        elif act in ("get_file_info", "get file info", "getfileinfo", "file_info"):
-            messages.append(status_message("File info is handled locally by the extension."))
-        else:
-            messages.append(error_message(f"Unknown action: {act}"))
-
-    return messages
 # ------------------------------------------------------------
 # FastAPI endpoints
 # ------------------------------------------------------------
