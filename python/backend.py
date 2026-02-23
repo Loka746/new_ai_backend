@@ -568,6 +568,160 @@ def process_message(user_input: str, conversation_history: str = "") -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
+# def process_user_message(request: ChatRequest) -> List[dict]:
+#     """
+#     Main entry point for /chat.
+#     Returns a list of messages (dicts) to be sent back to the extension.
+#     """
+#     messages = []
+
+#     # 1. If there is a pending action, handle it as a confirmation.
+#     if request.pending_action:
+#         action_data = request.pending_action
+#         act = action_data.get("action") or action_data.get("intent")
+#         if act == "create_file":
+#             path = action_data.get("path") or action_data.get("file_path")
+#             content = action_data.get("content", "")
+#             if path:
+#                 messages.extend(handle_create_file(path, content, confirmed=True))
+#             else:
+#                 messages.append(error_message("Missing path in pending action"))
+#         elif act == "update_file":
+#             path = action_data.get("path") or action_data.get("file_path")
+#             content = action_data.get("content", "")
+#             if path:
+#                 messages.extend(handle_update_file(path, content, confirmed=True))
+#             else:
+#                 messages.append(error_message("Missing path in pending action"))
+#         elif act == "create_folder":
+#             folder = action_data.get("folder") or action_data.get("folder_path")
+#             if folder:
+#                 messages.append(create_folder_action(folder))
+#             else:
+#                 messages.append(error_message("Missing folder in pending action"))
+#         elif act == "create_project":
+#             folder = action_data.get("folder") or action_data.get("project")
+#             files = action_data.get("files", [])
+#             if folder and files:
+#                 messages.extend(handle_create_project(folder, files))
+#             else:
+#                 messages.append(error_message("Missing folder or files in pending action"))
+#         elif act == "run_file":
+#             path = action_data.get("path") or action_data.get("file_path")
+#             env = action_data.get("environment", "none")
+#             if path:
+#                 messages.extend(handle_run_file(path, env))
+#             else:
+#                 messages.append(error_message("Missing path in pending action"))
+#         else:
+#             messages.append(error_message(f"Unknown pending action: {act}"))
+#         return messages
+
+#     # 2. No pending action: process the user message normally.
+#     assistant_reply = process_message(request.message, request.conversation_history)
+    
+#     # Extract JSON objects with positions
+#     json_items = extract_json_objects(assistant_reply)
+#     json_items.sort(key=lambda x: x[1])  # sort by start position
+
+#     # Build cleaned text by removing JSON blocks
+#     cleaned_parts = []
+#     last_end = 0
+#     for obj, start, end in json_items:
+#         if start > last_end:
+#             cleaned_parts.append(assistant_reply[last_end:start])
+#         last_end = end
+#     if last_end < len(assistant_reply):
+#         cleaned_parts.append(assistant_reply[last_end:])
+#     cleaned_text = ''.join(cleaned_parts).strip()
+
+#     # Send the cleaned text as the response message
+#     messages.append(response_message(cleaned_text))
+
+#     # Process each JSON object for actions (using the parsed objects)
+#     for obj, _, _ in json_items:   # <-- unpack tuple correctly
+#         action = obj.get("action") or obj.get("intent")
+#         if not action:
+#             continue
+#         act = action.strip().lower()
+#         # ... (rest of your action handling code, unchanged)
+
+#     # 3. Extract JSON actions from the reply and handle them.
+#     json_objects = extract_json_objects(assistant_reply)
+#     for obj in json_objects:
+#         action = obj.get("action") or obj.get("intent")
+#         if not action:
+#             continue
+#         act = action.strip().lower()
+
+#         if act in ("create_folder", "create folder", "createfolder"):
+#             folder = obj.get("folder") or obj.get("name")
+#             if folder:
+#                 messages.append(create_folder_action(folder))
+#             else:
+#                 messages.append(error_message("Missing folder name"))
+
+#         elif act in ("create_project", "create project", "createproject"):
+#             folder = obj.get("folder") or obj.get("name") or obj.get("project")
+#             files = obj.get("files", [])
+#             if folder and files:
+#                 messages.extend(handle_create_project(folder, files))
+#             else:
+#                 messages.append(error_message("Missing folder name or files list"))
+
+#         elif act in ("create_file", "create file", "createfile"):
+#             path = obj.get("path") or obj.get("filename") or obj.get("file")
+#             content = obj.get("content", "")
+#             if path:
+#                 messages.extend(handle_create_file(path, content))
+#             else:
+#                 messages.append(error_message("Missing path"))
+
+#         elif act in ("update_file", "update file", "updatefile"):
+#             path = obj.get("path") or obj.get("filename") or obj.get("file")
+#             content = obj.get("content", "")
+#             if path:
+#                 messages.extend(handle_update_file(path, content))
+#             else:
+#                 messages.append(error_message("Missing path"))
+
+#         elif act in ("run_file", "run file", "runfile", "test_file", "test file", "testfile"):
+#             path = obj.get("path") or obj.get("filename") or obj.get("file")
+#             env = obj.get("environment", "none")
+#             if path:
+#                 messages.extend(handle_run_file(path, env))
+#             else:
+#                 messages.append(error_message("Missing path"))
+
+#         elif act in ("debug_file", "debug file", "debugfile"):
+#             path = obj.get("path") or obj.get("filename") or obj.get("file")
+#             stage = obj.get("stage", "all")
+#             if path:
+#                 messages.extend(handle_debug_file(path, stage))
+#             else:
+#                 messages.append(error_message("Missing path"))
+#         elif act in ("auto_debug", "auto debug", "autodebug"):
+#             messages.append({"type": "auto_debug"})
+
+#         # For search actions, we could either handle them here (by searching the server's filesystem, which is useless)
+#         # or we can forward them to the extension. Since the extension already implements search locally,
+#         # we can ignore these actions or return a message that they are handled locally.
+#         # To keep compatibility, we'll just ignore them (the extension will not receive them anyway because they are in the AI text).
+#         # But if they appear as separate JSON, we should perhaps return a status that search is done locally.
+#         elif act in ("search_files", "search files", "searchfiles"):
+#             messages.append(status_message("File search is handled locally by the extension."))
+#         elif act in ("search_folders", "search folders", "searchfolders"):
+#             messages.append(status_message("Folder search is handled locally by the extension."))
+#         elif act in ("search_in_files", "search in files", "searchinfiles", "grep"):
+#             messages.append(status_message("Content search is handled locally by the extension."))
+#         elif act in ("get_file_info", "get file info", "getfileinfo", "file_info"):
+#             messages.append(status_message("File info is handled locally by the extension."))
+#         else:
+#             messages.append(error_message(f"Unknown action: {act}"))
+
+#     return messages
+
+
 def process_user_message(request: ChatRequest) -> List[dict]:
     """
     Main entry point for /chat.
@@ -619,7 +773,7 @@ def process_user_message(request: ChatRequest) -> List[dict]:
 
     # 2. No pending action: process the user message normally.
     assistant_reply = process_message(request.message, request.conversation_history)
-    
+
     # Extract JSON objects with positions
     json_items = extract_json_objects(assistant_reply)
     json_items.sort(key=lambda x: x[1])  # sort by start position
@@ -639,16 +793,7 @@ def process_user_message(request: ChatRequest) -> List[dict]:
     messages.append(response_message(cleaned_text))
 
     # Process each JSON object for actions (using the parsed objects)
-    for obj, _, _ in json_items:
-        action = obj.get("action") or obj.get("intent")
-        if not action:
-            continue
-        act = action.strip().lower()
-        # ... (rest of your action handling code, unchanged)
-
-    # 3. Extract JSON actions from the reply and handle them.
-    json_objects = extract_json_objects(assistant_reply)
-    for obj in json_objects:
+    for obj, _, _ in json_items:   # <-- unpack tuple correctly
         action = obj.get("action") or obj.get("intent")
         if not action:
             continue
@@ -702,12 +847,6 @@ def process_user_message(request: ChatRequest) -> List[dict]:
                 messages.append(error_message("Missing path"))
         elif act in ("auto_debug", "auto debug", "autodebug"):
             messages.append({"type": "auto_debug"})
-
-        # For search actions, we could either handle them here (by searching the server's filesystem, which is useless)
-        # or we can forward them to the extension. Since the extension already implements search locally,
-        # we can ignore these actions or return a message that they are handled locally.
-        # To keep compatibility, we'll just ignore them (the extension will not receive them anyway because they are in the AI text).
-        # But if they appear as separate JSON, we should perhaps return a status that search is done locally.
         elif act in ("search_files", "search files", "searchfiles"):
             messages.append(status_message("File search is handled locally by the extension."))
         elif act in ("search_folders", "search folders", "searchfolders"):
@@ -720,6 +859,7 @@ def process_user_message(request: ChatRequest) -> List[dict]:
             messages.append(error_message(f"Unknown action: {act}"))
 
     return messages
+
 
 # ------------------------------------------------------------
 # FastAPI endpoints
