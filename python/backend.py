@@ -413,6 +413,43 @@ def execute_and_capture_errors(code):
         sys.stdout = old_stdout
         sys.stderr = old_stderr
 
+# def extract_json_objects(s):
+#     if not isinstance(s, str):
+#         return []
+#     objects = []
+#     i = 0
+#     n = len(s)
+#     while i < n:
+#         if s[i] == '{':
+#             start = i
+#             brace_depth = 0
+#             in_string = False
+#             escape_next = False
+#             while i < n:
+#                 char = s[i]
+#                 if escape_next:
+#                     escape_next = False
+#                 elif char == '\\':
+#                     escape_next = True
+#                 elif char == '"' and not escape_next:
+#                     in_string = not in_string
+#                 elif not in_string:
+#                     if char == '{':
+#                         brace_depth += 1
+#                     elif char == '}':
+#                         brace_depth -= 1
+#                         if brace_depth == 0:
+#                             try:
+#                                 obj_str = s[start:i+1]
+#                                 obj = json.loads(obj_str)
+#                                 objects.append(obj)
+#                             except json.JSONDecodeError:
+#                                 pass
+#                             break
+#                 i += 1
+#         i += 1
+#     return objects
+
 def extract_json_objects(s):
     if not isinstance(s, str):
         return []
@@ -442,13 +479,14 @@ def extract_json_objects(s):
                             try:
                                 obj_str = s[start:i+1]
                                 obj = json.loads(obj_str)
-                                objects.append(obj)
+                                objects.append((obj, start, i+1))
                             except json.JSONDecodeError:
                                 pass
                             break
                 i += 1
         i += 1
     return objects
+
 
 def check_gemini_available():
     try:
@@ -581,7 +619,32 @@ def process_user_message(request: ChatRequest) -> List[dict]:
 
     # 2. No pending action: process the user message normally.
     assistant_reply = process_message(request.message, request.conversation_history)
-    messages.append(response_message(assistant_reply))
+    
+    # Extract JSON objects with positions
+    json_items = extract_json_objects(assistant_reply)
+    json_items.sort(key=lambda x: x[1])  # sort by start position
+
+    # Build cleaned text by removing JSON blocks
+    cleaned_parts = []
+    last_end = 0
+    for obj, start, end in json_items:
+        if start > last_end:
+            cleaned_parts.append(assistant_reply[last_end:start])
+        last_end = end
+    if last_end < len(assistant_reply):
+        cleaned_parts.append(assistant_reply[last_end:])
+    cleaned_text = ''.join(cleaned_parts).strip()
+
+    # Send the cleaned text as the response message
+    messages.append(response_message(cleaned_text))
+
+    # Process each JSON object for actions (using the parsed objects)
+    for obj, _, _ in json_items:
+        action = obj.get("action") or obj.get("intent")
+        if not action:
+            continue
+        act = action.strip().lower()
+        # ... (rest of your action handling code, unchanged)
 
     # 3. Extract JSON actions from the reply and handle them.
     json_objects = extract_json_objects(assistant_reply)
