@@ -510,6 +510,10 @@ def create_files_action(files: List[dict]) -> dict:
     """Return a message to create multiple files."""
     return {"type": "create_files", "files": files}
 
+def ask_test_confirmation_action(path: str = None) -> dict:
+    """Return a message asking user if they want to test the code."""
+    return {"type": "confirmation", "text": "Can I test this code?", "action": {"intent": "test_code", "path": path}}
+
 def status_message(text: str) -> dict:
     return {"type": "status", "text": text}
 
@@ -532,10 +536,16 @@ def handle_create_file(path: str, content: str, confirmed: bool = False) -> List
     # In server mode we cannot know if file exists on client side,
     # so we always just send the create_file action. The extension will handle duplicates.
     # For simplicity, we never ask for confirmation; the extension manages it.
-    return [create_file_action(path, content)]
+    messages = [create_file_action(path, content)]
+    # Add confirmation to ask if user wants to test the code (only for new code)
+    messages.append(ask_test_confirmation_action(path))
+    return messages
 
 def handle_update_file(path: str, content: str, confirmed: bool = False) -> List[dict]:
-    return [create_file_action(path, content)]  # same as create
+    messages = [create_file_action(path, content)]  # same as create
+    # For updates (error fixes), don't ask - just run the code
+    # Let the extension handle auto-run after debug
+    return messages
     
 def handle_create_project(folder: str, files: List[dict]) -> List[dict]:
     # Return a single compound action
@@ -767,6 +777,13 @@ def process_user_message(request: ChatRequest) -> List[dict]:
                 messages.extend(handle_run_file(path, env))
             else:
                 messages.append(error_message("Missing path in pending action"))
+        elif act == "test_code":
+            path = action_data.get("path")
+            if path:
+                messages.extend(handle_run_file(path, "none"))
+            else:
+                # Try to find the main entry point
+                messages.append({"type": "auto_debug"})
         else:
             messages.append(error_message(f"Unknown pending action: {act}"))
         return messages
