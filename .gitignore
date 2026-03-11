@@ -42,3 +42,6 @@ coverage/
 *.tmp
 *.swp
 .cache/
+
+# Project-specific
+.env.example
