@@ -3,34 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM - Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>CRM Login</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body class="bg-gray-100 h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md w-96">
-        <h2 class="text-2xl font-bold mb-6 text-center text-gray-800" id="form-title">Login to CRM</h2>
-        
-        <div id="error-msg" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+<body class="auth-body">
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>Welcome to CRM</h2>
+            <p class="auth-subtitle">Sign in to continue</p>
+            
+            <div id="auth-error" class="alert alert-danger hidden"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="Enter your password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+                    <span class="btn-text">Sign In</span>
+                    <span class="spinner hidden"></span>
+                </button>
+            </form>
+            
+            <div class="auth-switch">
+                <p>Don't have an account? <a href="#" id="show-register">Register here</a></p>
+            </div>
+        </div>
 
-        <form id="auth-form" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Email</label>
-                <input type="email" id="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <div class="auth-card hidden" id="register-card">
+            <h2>Create Account</h2>
+            <p class="auth-subtitle">Join the CRM platform</p>
+            
+            <div id="reg-error" class="alert alert-danger hidden"></div>
+            
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="reg-name">Full Name</label>
+                    <input type="text" id="reg-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="reg-email">Email Address</label>
+                    <input type="email" id="reg-email" required placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" required minlength="8" placeholder="Min 8 characters">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="reg-btn">
+                    <span class="btn-text">Register</span>
+                    <span class="spinner hidden"></span>
+                </button>
+            </form>
+            
+            <div class="auth-switch">
+                <p>Already have an account? <a href="#" id="show-login">Sign in here</a></p>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" id="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-            </div>
-            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                <span id="btn-text">Sign In</span>
-            </button>
-        </form>
-        
-        <div class="mt-4 text-center">
-            <button id="toggle-mode" class="text-sm text-blue-600 hover:text-blue-500">Need an account? Register</button>
         </div>
     </div>
-    <script src="/static/js/api.js"></script>
     <script src="/static/js/auth.js"></script>
 </body>
 </html>

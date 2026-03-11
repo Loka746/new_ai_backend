@@ -4,9 +4,6 @@
 This file tracks all tasks, updates, and error fixes.
 
 ## 2026-03-11 - Created File
-- Created: sum.py
-
-## 2026-03-11 - Created File
 - Created: crm_project/requirements.txt
 
 ## 2026-03-11 - Created File
@@ -28,7 +25,7 @@ This file tracks all tasks, updates, and error fixes.
 - Created: crm_project/auth.py
 
 ## 2026-03-11 - Created File
-- Created: crm_project/routers/customers.py
+- Created: crm_project/api.py
 
 ## 2026-03-11 - Created File
 - Created: crm_project/main.py
@@ -40,10 +37,13 @@ This file tracks all tasks, updates, and error fixes.
 - Created: crm_project/static/dashboard.html
 
 ## 2026-03-11 - Created File
-- Created: crm_project/static/js/api.js
+- Created: crm_project/static/css/style.css
 
 ## 2026-03-11 - Created File
 - Created: crm_project/static/js/auth.js
 
 ## 2026-03-11 - Created File
-- Created: crm_project/static/js/dashboard.js
+- Created: crm_project/static/js/app.js
+
+## 2026-03-11 - Created File
+- Created: crm_project/TODO.md
