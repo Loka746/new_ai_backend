@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeCoding - Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="dashboard-body">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-code"></i>
+            <h2>VibeCoding</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="active" data-target="dashboard-view" onclick="switchView('dashboard-view')">
+                <i class="fa-solid fa-chart-pie"></i> Dashboard
+            </li>
+            <li data-target="projects-view" onclick="switchView('projects-view')">
+                <i class="fa-solid fa-folder-open"></i> Projects
+            </li>
+            <li data-target="tasks-view" onclick="switchView('tasks-view')">
+                <i class="fa-solid fa-list-check"></i> Tasks
+            </li>
+            <li data-target="settings-view" onclick="switchView('settings-view')">
+                <i class="fa-solid fa-gear"></i> Settings
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <button onclick="logout()" class="btn btn-danger btn-block">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="search-bar">
+                <i class="fa-solid fa-search"></i>
+                <input type="text" id="globalSearch" placeholder="Search projects, tasks...">
+            </div>
+            <div class="user-profile">
+                <span id="userNameDisplay">Loading...</span>
+                <div class="avatar">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view-section active">
+            <div class="page-header">
+                <h1>Dashboard Overview</h1>
+                <button class="btn btn-primary" onclick="openModal('projectModal')">
+                    <i class="fa-solid fa-plus"></i> New Project
+                </button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon bg-primary-light">
+                        <i class="fa-solid fa-folder text-primary"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Total Projects</h3>
+                        <p id="totalProjectsCount">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-warning-light">
+                        <i class="fa-solid fa-spinner text-warning"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Active Tasks</h3>
+                        <p id="activeTasksCount">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-success-light">
+                        <i class="fa-solid fa-check-double text-success"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Completed Tasks</h3>
+                        <p id="completedTasksCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recent-section">
+                <h2>Recent Projects</h2>
+                <div class="table-responsive">
+                    <table class="data-table" id="recentProjectsTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects View -->
+        <div id="projects-view" class="view-section hidden">
+            <div class="page-header">
+                <h1>Manage Projects</h1>
+                <button class="btn btn-primary" onclick="openModal('projectModal')">
+                    <i class="fa-solid fa-plus"></i> New Project
+                </button>
+            </div>
+            <div class="filters">
+                <input type="text" id="projectSearch" placeholder="Search projects..." onkeyup="filterProjects()">
+                <select id="projectStatusFilter" onchange="filterProjects()">
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table" id="allProjectsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tasks View -->
+        <div id="tasks-view" class="view-section hidden">
+            <div class="page-header">
+                <h1>Manage Tasks</h1>
+                <button class="btn btn-primary" onclick="openModal('taskModal')">
+                    <i class="fa-solid fa-plus"></i> New Task
+                </button>
+            </div>
+            <div class="filters">
+                <input type="text" id="taskSearch" placeholder="Search tasks..." onkeyup="filterTasks()">
+                <select id="taskProjectFilter" onchange="filterTasks()">
+                    <option value="all">All Projects</option>
+                    <!-- Populated by JS -->
+                </select>
+                <select id="taskStatusFilter" onchange="filterTasks()">
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="done">Done</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table" id="allTasksTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view-section hidden">
+            <div class="page-header">
+                <h1>Settings</h1>
+            </div>
+            <div class="settings-card">
+                <h3>Profile Information</h3>
+                <p><strong>Email:</strong> <span id="settingsEmail"></span></p>
+                <p><strong>Name:</strong> <span id="settingsName"></span></p>
+                <p><strong>Member Since:</strong> <span id="settingsDate"></span></p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- Project Modal -->
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="projectModalTitle">Create Project</h2>
+                <span class="close" onclick="closeModal('projectModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="projectForm">
+                    <input type="hidden" id="projectId">
+                    <div class="form-group">
+                        <label>Project Name</label>
+                        <input type="text" id="projectName" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="projectDescription" rows="3" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="projectStatus" class="form-control">
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal('projectModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Project</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="taskModalTitle">Create Task</h2>
+                <span class="close" onclick="closeModal('taskModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <input type="hidden" id="taskId">
+                    <div class="form-group">
+                        <label>Task Title</label>
+                        <input type="text" id="taskTitle" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Project</label>
+                        <select id="taskProjectId" required class="form-control">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="taskDescription" rows="3" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="taskStatus" class="form-control">
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal('taskModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
