@@ -1,124 +1,170 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const showRegisterBtn = document.getElementById('show-register');
-    const showLoginBtn = document.getElementById('show-login');
-    const loginCard = document.querySelector('.auth-card:not(#register-card)');
-    const registerCard = document.getElementById('register-card');
-    const loginError = document.getElementById('auth-error');
-    const regError = document.getElementById('reg-error');
+/**
+ * Authentication Logic for CRM
+ * Handles login, registration, token storage, and route guarding
+ */
 
-    // Check if already logged in
-    if (localStorage.getItem('crm_token')) {
-        window.location.href = '/dashboard';
+const API_URL = 'http://localhost:8000/api';
+
+// --- Utility Functions ---
+function setToken(token) {
+    localStorage.setItem('crm_token', token);
+}
+
+function getToken() {
+    return localStorage.getItem('crm_token');
+}
+
+function removeToken() {
+    localStorage.removeItem('crm_token');
+}
+
+function setUserData(user) {
+    localStorage.setItem('crm_user', JSON.stringify(user));
+}
+
+function getUserData() {
+    const user = localStorage.getItem('crm_user');
+    return user ? JSON.parse(user) : null;
+}
+
+function isAuthenticated() {
+    const token = getToken();
+    if (!token) return false;
+    
+    // Check token expiry (basic check, could be expanded with jwt-decode)
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+            removeToken();
+            return false;
+        }
+        return true;
+    } catch (e) {
+        return false;
     }
+}
 
-    showRegisterBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginCard.classList.add('hidden');
-        registerCard.classList.remove('hidden');
-    });
+function logout() {
+    removeToken();
+    localStorage.removeItem('crm_user');
+    window.location.href = '/';
+}
 
-    showLoginBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        registerCard.classList.add('hidden');
-        loginCard.classList.remove('hidden');
-    });
+// --- Toast Notifications ---
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container') || createToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${message}</span>`;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const btn = document.getElementById('login-btn');
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+    return container;
+}
+
+// --- API Calls ---
+async function login(email, password) {
+    try {
+        const formData = new URLSearchParams();
+        formData.append('username', email);
+        formData.append('password', password);
+
+        const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+        });
+
+        const data = await response.json();
         
-        setLoading(btn, true);
-        loginError.classList.add('hidden');
-
-        try {
-            const formData = new URLSearchParams();
-            formData.append('username', email);
-            formData.append('password', password);
-
-            const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                localStorage.setItem('crm_token', data.access_token);
-                window.location.href = '/dashboard';
-            } else {
-                showError(loginError, data.detail || 'Login failed');
-            }
-        } catch (error) {
-            showError(loginError, 'Network error occurred');
-        } finally {
-            setLoading(btn, false);
+        if (!response.ok) {
+            throw new Error(data.detail || 'Login failed');
         }
-    });
 
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('reg-name').value;
-        const email = document.getElementById('reg-email').value;
-        const password = document.getElementById('reg-password').value;
-        const btn = document.getElementById('reg-btn');
-
-        setLoading(btn, true);
-        regError.classList.add('hidden');
-
-        try {
-            const response = await fetch('/api/auth/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    full_name: name,
-                    email: email,
-                    password: password
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                // Auto login after register
-                document.getElementById('email').value = email;
-                document.getElementById('password').value = password;
-                showLoginBtn.click();
-                loginForm.dispatchEvent(new Event('submit'));
-            } else {
-                showError(regError, data.detail || 'Registration failed');
-            }
-        } catch (error) {
-            showError(regError, 'Network error occurred');
-        } finally {
-            setLoading(btn, false);
-        }
-    });
-
-    function setLoading(btn, isLoading) {
-        const text = btn.querySelector('.btn-text');
-        const spinner = btn.querySelector('.spinner');
-        if (isLoading) {
-            text.classList.add('hidden');
-            spinner.classList.remove('hidden');
-            btn.disabled = true;
-        } else {
-            text.classList.remove('hidden');
-            spinner.classList.add('hidden');
-            btn.disabled = false;
-        }
+        setToken(data.access_token);
+        await fetchUserProfile();
+        
+        showToast('Login successful!');
+        setTimeout(() => window.location.href = '/dashboard', 1000);
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+        console.error('Login Error:', error);
     }
+}
 
-    function showError(element, message) {
-        element.textContent = message;
-        element.classList.remove('hidden');
+async function register(fullName, email, password) {
+    try {
+        const response = await fetch(`${API_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                full_name: fullName,
+                email: email,
+                password: password,
+                role: 'sales',
+                is_active: true
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Registration failed');
+        }
+
+        showToast('Registration successful! Please login.');
+        // Automatically switch to login modal if on index page
+        if (typeof closeAllModals === 'function') {
+            closeAllModals();
+            document.getElementById('loginModal').classList.add('active');
+        }
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+        console.error('Registration Error:', error);
+    }
+}
+
+async function fetchUserProfile() {
+    try {
+        const response = await fetch(`${API_URL}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        
+        if (response.ok) {
+            const userData = await response.json();
+            setUserData(userData);
+            return userData;
+        }
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+    }
+}
+
+// --- Route Guarding ---
+document.addEventListener('DOMContentLoaded', () => {
+    const path = window.location.pathname;
+    const isAuthPage = path === '/' || path === '/index.html';
+    
+    if (isAuthenticated()) {
+        if (isAuthPage) {
+            window.location.href = '/dashboard';
+        }
+    } else {
+        if (!isAuthPage) {
+            window.location.href = '/';
+        }
     }
 });

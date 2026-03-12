@@ -45,14 +45,8 @@ coverage/
 
 # Project-specific
 .env.example
-
-# Added by VibeCoding Git Push
-
-# Added by VibeCoding Git Push
-
-# Added by VibeCoding Git Push
-sample
-
-# Added by VibeCoding Git Push
-
-# Added by VibeCoding Git Push
+.env.example
+.env.example
+.env.example
+.env.example
+auth.py

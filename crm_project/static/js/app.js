@@ -1,266 +1,424 @@
-const token = localStorage.getItem('crm_token');
-if (!token) {
-    window.location.href = '/';
+/**
+ * Main Application Logic for CRM Dashboard
+ * Handles CRUD operations, UI rendering, pagination, and modals
+ */
+
+// Global State
+const state = {
+    currentView: 'dashboard',
+    customers: { items: [], total: 0, skip: 0, limit: 10, search: '' },
+    deals: { items: [], total: 0, skip: 0, limit: 10, search: '', status: '' },
+    interactions: { items: [], total: 0, skip: 0, limit: 20 }
+};
+
+// DOM Elements
+const elements = {
+    views: document.querySelectorAll('.view-section'),
+    menuItems: document.querySelectorAll('.menu-item'),
+    userNameDisplay: document.getElementById('user-name-display'),
+    userAvatarDisplay: document.getElementById('user-avatar-display'),
+    logoutBtn: document.getElementById('logout-btn')
+};
+
+// Initialize App
+document.addEventListener('DOMContentLoaded', async () => {
+    // Guard check is handled in auth.js
+    const user = getUserData();
+    if (user) {
+        elements.userNameDisplay.textContent = user.full_name;
+        elements.userAvatarDisplay.textContent = user.full_name.charAt(0).toUpperCase();
+    }
+
+    // Setup Event Listeners
+    setupNavigation();
+    setupModals();
+    setupForms();
+    setupSearchAndFilters();
+
+    // Load initial data
+    await loadDashboardStats();
+});
+
+// --- Navigation --- 
+function setupNavigation() {
+    elements.menuItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            // Remove active class from all
+            elements.menuItems.forEach(i => i.classList.remove('active'));
+            // Add active to clicked
+            e.currentTarget.classList.add('active');
+            
+            const view = e.currentTarget.dataset.view;
+            if (view) switchView(view);
+        });
+    });
+
+    if (elements.logoutBtn) {
+        elements.logoutBtn.addEventListener('click', logout);
+    }
 }
 
-// API Utility
+function switchView(viewName) {
+    state.currentView = viewName;
+    elements.views.forEach(view => {
+        view.classList.add('d-none');
+        if (view.id === `${viewName}-view`) {
+            view.classList.remove('d-none');
+        }
+    });
+
+    // Load data based on view
+    if (viewName === 'dashboard') loadDashboardStats();
+    if (viewName === 'customers') loadCustomers();
+    if (viewName === 'deals') loadDeals();
+}
+
+// --- API Fetch Wrapper ---
 async function apiCall(endpoint, method = 'GET', body = null) {
     const headers = {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
     };
     
-    const options = { method, headers };
-    if (body) options.body = JSON.stringify(body);
+    const config = { method, headers };
+    if (body) config.body = JSON.stringify(body);
 
     try {
-        const response = await fetch(`/api${endpoint}`, options);
+        const response = await fetch(`${API_URL}${endpoint}`, config);
         if (response.status === 401) {
-            localStorage.removeItem('crm_token');
-            window.location.href = '/';
-            return null;
+            logout();
+            return;
         }
-        if (response.status === 204) return true;
-        
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'API Error');
-        return data;
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'API request failed');
+        }
+        return response.status !== 204 ? await response.json() : null;
     } catch (error) {
         showToast(error.message, 'error');
         throw error;
     }
 }
 
-// UI State
-let currentUser = null;
-let customers = [];
-let leads = [];
-
-// Initialization
-document.addEventListener('DOMContentLoaded', async () => {
-    await loadUser();
-    setupNavigation();
-    setupModals();
-    await loadDashboardData();
-
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        localStorage.removeItem('crm_token');
-        window.location.href = '/';
-    });
-});
-
-async function loadUser() {
+// --- Dashboard Logic ---
+async function loadDashboardStats() {
     try {
-        currentUser = await apiCall('/auth/me');
-        document.getElementById('user-name').textContent = currentUser.full_name;
+        const stats = await apiCall('/stats');
+        document.getElementById('stat-total-customers').textContent = stats.total_customers;
+        document.getElementById('stat-total-deals').textContent = stats.total_deals;
+        document.getElementById('stat-deals-won').textContent = stats.deals_won;
+        document.getElementById('stat-revenue').textContent = `$${stats.total_revenue.toLocaleString()}`;
+        
+        renderRecentActivity(stats.recent_customers, stats.recent_deals);
     } catch (e) {
-        console.error('Failed to load user');
+        console.error("Failed to load stats", e);
     }
 }
 
-function setupNavigation() {
-    const navItems = document.querySelectorAll('.nav-item');
-    const views = document.querySelectorAll('.view-section');
+function renderRecentActivity(customers, deals) {
+    const tbody = document.getElementById('recent-activity-table');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    const activities = [
+        ...customers.map(c => ({ type: 'Customer Added', name: `${c.first_name} ${c.last_name}`, date: c.created_at })),
+        ...deals.map(d => ({ type: 'Deal Created', name: d.title, date: d.created_at }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
-    navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            navItems.forEach(nav => nav.classList.remove('active'));
-            views.forEach(view => view.classList.add('hidden'));
-            
-            item.classList.add('active');
-            const targetId = item.getAttribute('data-target');
-            document.getElementById(targetId).classList.remove('hidden');
+    if (activities.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">No recent activity</td></tr>';
+        return;
+    }
 
-            if (targetId === 'customers-view') renderCustomers();
-            if (targetId === 'leads-view') renderLeads();
-            if (targetId === 'dashboard-view') updateDashboardStats();
+    activities.forEach(act => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${act.type}</td>
+            <td>${act.name}</td>
+            <td>${new Date(act.date).toLocaleDateString()}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// --- Customers Logic ---
+async function loadCustomers() {
+    try {
+        const { skip, limit, search } = state.customers;
+        let url = `/customers?skip=${skip}&limit=${limit}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        
+        const data = await apiCall(url);
+        state.customers.items = data.items;
+        state.customers.total = data.total;
+        
+        renderCustomersTable();
+        updatePagination('customers');
+    } catch (e) {
+        console.error("Failed to load customers", e);
+    }
+}
+
+function renderCustomersTable() {
+    const tbody = document.getElementById('customers-table-body');
+    tbody.innerHTML = '';
+    
+    if (state.customers.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No customers found</td></tr>';
+        return;
+    }
+
+    state.customers.items.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${c.first_name} ${c.last_name}</td>
+            <td>${c.email}</td>
+            <td>${c.company || '-'}</td>
+            <td>${new Date(c.created_at).toLocaleDateString()}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editCustomer(${c.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id})">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function deleteCustomer(id) {
+    if (!confirm("Are you sure you want to delete this customer?")) return;
+    try {
+        await apiCall(`/customers/${id}`, 'DELETE');
+        showToast("Customer deleted successfully");
+        loadCustomers();
+        loadDashboardStats();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// --- Deals Logic ---
+async function loadDeals() {
+    try {
+        const { skip, limit, search, status } = state.deals;
+        let url = `/deals?skip=${skip}&limit=${limit}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (status) url += `&status=${status}`;
+        
+        const data = await apiCall(url);
+        state.deals.items = data.items;
+        state.deals.total = data.total;
+        
+        renderDealsTable();
+        updatePagination('deals');
+    } catch (e) {
+        console.error("Failed to load deals", e);
+    }
+}
+
+function renderDealsTable() {
+    const tbody = document.getElementById('deals-table-body');
+    tbody.innerHTML = '';
+    
+    if (state.deals.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No deals found</td></tr>';
+        return;
+    }
+
+    state.deals.items.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${d.title}</td>
+            <td>$${d.value.toLocaleString()}</td>
+            <td><span class="status-badge status-${d.status}">${d.status.toUpperCase()}</span></td>
+            <td>${d.expected_close_date ? new Date(d.expected_close_date).toLocaleDateString() : '-'}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm" onclick="editDeal(${d.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDeal(${d.id})">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function deleteDeal(id) {
+    if (!confirm("Are you sure you want to delete this deal?")) return;
+    try {
+        await apiCall(`/deals/${id}`, 'DELETE');
+        showToast("Deal deleted successfully");
+        loadDeals();
+        loadDashboardStats();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// --- Search & Pagination ---
+function setupSearchAndFilters() {
+    const customerSearch = document.getElementById('customer-search');
+    if (customerSearch) {
+        customerSearch.addEventListener('input', debounce((e) => {
+            state.customers.search = e.target.value;
+            state.customers.skip = 0;
+            loadCustomers();
+        }, 500));
+    }
+
+    const dealSearch = document.getElementById('deal-search');
+    if (dealSearch) {
+        dealSearch.addEventListener('input', debounce((e) => {
+            state.deals.search = e.target.value;
+            state.deals.skip = 0;
+            loadDeals();
+        }, 500));
+    }
+}
+
+function updatePagination(entity) {
+    const info = document.getElementById(`${entity}-page-info`);
+    if (!info) return;
+    const s = state[entity];
+    const currentPage = Math.floor(s.skip / s.limit) + 1;
+    const totalPages = Math.ceil(s.total / s.limit) || 1;
+    info.textContent = `Page ${currentPage} of ${totalPages}`;
+}
+
+window.prevPage = function(entity) {
+    if (state[entity].skip >= state[entity].limit) {
+        state[entity].skip -= state[entity].limit;
+        entity === 'customers' ? loadCustomers() : loadDeals();
+    }
+}
+
+window.nextPage = function(entity) {
+    if (state[entity].skip + state[entity].limit < state[entity].total) {
+        state[entity].skip += state[entity].limit;
+        entity === 'customers' ? loadCustomers() : loadDeals();
+    }
+}
+
+function debounce(func, timeout = 300){
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    };
+}
+
+// --- Modals & Forms ---
+function setupModals() {
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.modal-overlay').classList.remove('active');
         });
     });
 }
 
-async function loadDashboardData() {
-    try {
-        [customers, leads] = await Promise.all([
-            apiCall('/customers'),
-            apiCall('/leads')
-        ]);
-        updateDashboardStats();
-    } catch (e) {
-        console.error('Failed to load data');
+window.openModal = function(modalId) {
+    document.getElementById(modalId).classList.add('active');
+    if (modalId === 'dealModal') {
+        populateCustomerDropdown();
     }
 }
 
-function updateDashboardStats() {
-    document.getElementById('stat-customers').textContent = customers.length;
-    document.getElementById('stat-leads').textContent = leads.length;
-    
-    const totalValue = leads.reduce((sum, lead) => sum + (lead.estimated_value || 0), 0);
-    document.getElementById('stat-value').textContent = `$${totalValue.toLocaleString()}`;
+window.closeModal = function(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+    document.getElementById(`${modalId.replace('Modal', '')}Form`).reset();
+    document.getElementById(`${modalId.replace('Modal', '')}Id`).value = '';
 }
 
-// Customers Logic
-function renderCustomers() {
-    const tbody = document.querySelector('#customers-table tbody');
-    tbody.innerHTML = '';
-    
-    customers.forEach(cust => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${cust.company_name}</td>
-            <td>${cust.contact_name}</td>
-            <td>${cust.email}</td>
-            <td>${cust.industry || '-'}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="editCustomer(${cust.id})"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCustomer(${cust.id})"><i class="fas fa-trash"></i></button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
+function setupForms() {
+    const customerForm = document.getElementById('customerForm');
+    if (customerForm) {
+        customerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('customerId').value;
+            const payload = {
+                first_name: document.getElementById('c_first_name').value,
+                last_name: document.getElementById('c_last_name').value,
+                email: document.getElementById('c_email').value,
+                company: document.getElementById('c_company').value,
+                phone: document.getElementById('c_phone').value
+            };
+            
+            try {
+                if (id) {
+                    await apiCall(`/customers/${id}`, 'PUT', payload);
+                    showToast("Customer updated successfully");
+                } else {
+                    await apiCall(`/customers`, 'POST', payload);
+                    showToast("Customer created successfully");
+                }
+                closeModal('customerModal');
+                loadCustomers();
+                loadDashboardStats();
+            } catch (err) {}
+        });
+    }
+
+    const dealForm = document.getElementById('dealForm');
+    if (dealForm) {
+        dealForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('dealId').value;
+            const payload = {
+                title: document.getElementById('d_title').value,
+                value: parseFloat(document.getElementById('d_value').value),
+                status: document.getElementById('d_status').value,
+                customer_id: parseInt(document.getElementById('d_customer_id').value)
+            };
+            
+            try {
+                if (id) {
+                    await apiCall(`/deals/${id}`, 'PUT', payload);
+                    showToast("Deal updated successfully");
+                } else {
+                    await apiCall(`/deals`, 'POST', payload);
+                    showToast("Deal created successfully");
+                }
+                closeModal('dealModal');
+                loadDeals();
+                loadDashboardStats();
+            } catch (err) {}
+        });
+    }
 }
 
-// Leads Logic
-function renderLeads() {
-    const tbody = document.querySelector('#leads-table tbody');
-    tbody.innerHTML = '';
-    
-    leads.forEach(lead => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${lead.title}</td>
-            <td>${lead.contact_name}</td>
-            <td><span class="badge badge-${lead.status}">${lead.status.toUpperCase()}</span></td>
-            <td>$${(lead.estimated_value || 0).toLocaleString()}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="editLead(${lead.id})"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteLead(${lead.id})"><i class="fas fa-trash"></i></button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// Modal & Form Handling
-function showModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function hideModal(id) {
-    document.getElementById(id).classList.remove('active');
-    if(id === 'customer-modal') document.getElementById('customer-form').reset();
-    if(id === 'lead-modal') document.getElementById('lead-form').reset();
-}
-
-function setupModals() {
-    // Customer Form
-    document.getElementById('customer-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('customer-id').value;
-        const data = {
-            company_name: document.getElementById('cust-company').value,
-            contact_name: document.getElementById('cust-contact').value,
-            email: document.getElementById('cust-email').value,
-            industry: document.getElementById('cust-industry').value
-        };
-
-        try {
-            if (id) {
-                await apiCall(`/customers/${id}`, 'PUT', data);
-                showToast('Customer updated successfully');
-            } else {
-                await apiCall('/customers', 'POST', data);
-                showToast('Customer created successfully');
-            }
-            hideModal('customer-modal');
-            await loadDashboardData();
-            renderCustomers();
-        } catch (e) {}
-    });
-
-    // Lead Form
-    document.getElementById('lead-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('lead-id').value;
-        const data = {
-            title: document.getElementById('lead-title').value,
-            contact_name: document.getElementById('lead-contact').value,
-            email: document.getElementById('lead-email').value,
-            status: document.getElementById('lead-status').value,
-            estimated_value: parseFloat(document.getElementById('lead-value').value) || 0
-        };
-
-        try {
-            if (id) {
-                await apiCall(`/leads/${id}`, 'PUT', data);
-                showToast('Lead updated successfully');
-            } else {
-                await apiCall('/leads', 'POST', data);
-                showToast('Lead created successfully');
-            }
-            hideModal('lead-modal');
-            await loadDashboardData();
-            renderLeads();
-        } catch (e) {}
-    });
-}
-
-// Edit/Delete Actions
-window.editCustomer = (id) => {
-    const cust = customers.find(c => c.id === id);
-    if(!cust) return;
-    document.getElementById('customer-id').value = cust.id;
-    document.getElementById('cust-company').value = cust.company_name;
-    document.getElementById('cust-contact').value = cust.contact_name;
-    document.getElementById('cust-email').value = cust.email;
-    document.getElementById('cust-industry').value = cust.industry || '';
-    document.getElementById('customer-modal-title').textContent = 'Edit Customer';
-    showModal('customer-modal');
-};
-
-window.deleteCustomer = async (id) => {
-    if(!confirm('Are you sure you want to delete this customer?')) return;
+async function populateCustomerDropdown() {
+    const select = document.getElementById('d_customer_id');
+    select.innerHTML = '<option value="">Select Customer...</option>';
     try {
-        await apiCall(`/customers/${id}`, 'DELETE');
-        showToast('Customer deleted');
-        await loadDashboardData();
-        renderCustomers();
+        const data = await apiCall('/customers?limit=100');
+        data.items.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.first_name} ${c.last_name} (${c.company || 'No Company'})`;
+            select.appendChild(opt);
+        });
     } catch (e) {}
-};
+}
 
-window.editLead = (id) => {
-    const lead = leads.find(l => l.id === id);
-    if(!lead) return;
-    document.getElementById('lead-id').value = lead.id;
-    document.getElementById('lead-title').value = lead.title;
-    document.getElementById('lead-contact').value = lead.contact_name;
-    document.getElementById('lead-email').value = lead.email;
-    document.getElementById('lead-status').value = lead.status;
-    document.getElementById('lead-value').value = lead.estimated_value || 0;
-    document.getElementById('lead-modal-title').textContent = 'Edit Lead';
-    showModal('lead-modal');
-};
-
-window.deleteLead = async (id) => {
-    if(!confirm('Are you sure you want to delete this lead?')) return;
+window.editCustomer = async function(id) {
     try {
-        await apiCall(`/leads/${id}`, 'DELETE');
-        showToast('Lead deleted');
-        await loadDashboardData();
-        renderLeads();
+        const c = await apiCall(`/customers/${id}`);
+        document.getElementById('customerId').value = c.id;
+        document.getElementById('c_first_name').value = c.first_name;
+        document.getElementById('c_last_name').value = c.last_name;
+        document.getElementById('c_email').value = c.email;
+        document.getElementById('c_company').value = c.company || '';
+        document.getElementById('c_phone').value = c.phone || '';
+        openModal('customerModal');
     } catch (e) {}
-};
+}
 
-// Toast Notifications
-function showToast(message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+window.editDeal = async function(id) {
+    try {
+        await populateCustomerDropdown();
+        const d = await apiCall(`/deals/${id}`);
+        document.getElementById('dealId').value = d.id;
+        document.getElementById('d_title').value = d.title;
+        document.getElementById('d_value').value = d.value;
+        document.getElementById('d_status').value = d.status;
+        document.getElementById('d_customer_id').value = d.customer_id;
+        openModal('dealModal');
+    } catch (e) {}
 }

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopNova - Modern E-Commerce</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">ShopNova</div>
+        <div class="nav-links" id="nav-links">
+            <a href="/">Home</a>
+            <a href="/login" id="login-link">Login</a>
+        </div>
+    </nav>
+    <main class="container">
+        <header class="hero">
+            <h1>Welcome to ShopNova</h1>
+            <p>Discover our amazing products</p>
+        </header>
+        <div id="products-grid" class="products-grid">
+            <!-- Products injected via JS -->
+        </div>
+    </main>
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProducts();
+            updateNav();
+        });
+    </script>
+</body>
+</html>
